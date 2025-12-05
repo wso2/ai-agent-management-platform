@@ -44,7 +44,7 @@ Fill in the agent creation form with these exact values:
 | **Description**       | `AI-powered customer support agent for travel services` |
 | **GitHub Repository** | `https://github.com/wso2/ai-agent-management-platform`  |
 | **Branch**            | `main`                                                  |
-| **App Path**          | `samples/customer_support_agent`                        |
+| **App Path**          | `samples/customer-support-agent`                        |
 | **Language**          | `Python`                                                |
 | **Language Version**  | `3.11`                                                  |
 | **Start Command**     | `python main.py`                                        |
