@@ -6,7 +6,6 @@ The Customer Support Agent is an AI-powered customer service assistant that help
 
 **Based on**: [LangGraph Customer Support Tutorial](https://github.com/langchain-ai/langgraph/blob/main/docs/docs/tutorials/customer-support/customer-support.ipynb)
 
-
 ## Prerequisites
 
 Before deploying this agent, ensure you have:
@@ -25,7 +24,6 @@ Before deploying this agent, ensure you have:
 
 1. Create your PostgreSQL database
 2. Apply the database dump:
-
 
 ## Deployment Instructions
 
@@ -82,6 +80,7 @@ DATABASE_URL=<your-postgresql-connection-string>
 Try these sample questions:
 
 **Flight Inquiries:**
+
 ```json
 {
   "thread_id": 1,
@@ -95,12 +94,13 @@ Try these sample questions:
 ```json
 {
   "thread_id": 2,
-  "question": "Find me a hotel in Paris for next week",
+  "question": "Find me a hotel in Geneva for next week",
   "passenger_id": "3442 587242"
 }
 ```
 
 **General Travel Help:**
+
 ```json
 {
   "thread_id": 3,
