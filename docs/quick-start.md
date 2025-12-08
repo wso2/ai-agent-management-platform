@@ -29,7 +29,7 @@ docker  run  -it --rm --name wso2-amp \
     -p 127.0.0.1:9098:9098 \
     -p 127.0.0.1:21893:21893 \
     -p 127.0.0.1:8443:8443 \
-  ghcr.io/wso2/amp-quick-start:v0.0.0-dev
+  ghcr.io/wso2/amp-quick-start:v0.0.1-dev
 ```
 
 ### Step 2: Run Installation Inside Container
