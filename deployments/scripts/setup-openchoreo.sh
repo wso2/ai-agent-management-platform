@@ -137,13 +137,15 @@ kubectl wait --for=condition=Available deployment --all -n openchoreo-build-plan
 echo "✅ OpenChoreo Build Plane ready"
 echo ""
 
-# Install Custom Build CI Workflows
-echo "5️⃣ Installing Custom Build CI Workflows..."
-if helm status amp-custom-build-ci-workflows -n openchoreo-build-plane &>/dev/null; then
-    echo "⏭️  Custom Build CI Workflows already installed, skipping..."
-else
-    helm install amp-custom-build-ci-workflows $PROJECT_ROOT/deployments/helm-charts/wso2-amp-build-extension --namespace openchoreo-build-plane
-    echo "✅ Custom Build CI Workflows installed successfully"
+    # Install Custom Build CI Workflows
+    echo "5️⃣.2 Installing Custom Build CI Workflows..."
+    if helm status custom-build-ci-workflows -n openchoreo-build-plane &>/dev/null; then
+        echo "⏭️  Custom Build CI Workflows already installed, skipping..."
+    else
+        helm install custom-build-ci-workflows $PROJECT_ROOT/deployments/helm-charts/wso2-amp-build-extension --namespace openchoreo-build-plane
+        echo "✅ Custom Build CI Workflows installed successfully"
+    fi
+    echo ""
 fi
 echo ""
 
