@@ -16,6 +16,22 @@
 
 package models
 
+// Valid filter values as constants
+const (
+	// Sort field options
+	SortByName      = "name"
+	SortByCreatedAt = "createdAt"
+	SortByUpdatedAt = "updatedAt"
+
+	// Sort order options
+	SortOrderAsc  = "asc"
+	SortOrderDesc = "desc"
+
+	// Provisioning type options
+	ProvisioningInternal = "internal"
+	ProvisioningExternal = "external"
+)
+
 // AgentFilter holds filter options for listing agents
 type AgentFilter struct {
 	Search           string // search in name, displayName, description
@@ -29,9 +45,24 @@ type AgentFilter struct {
 // DefaultAgentFilter returns filter with sensible defaults
 func DefaultAgentFilter() AgentFilter {
 	return AgentFilter{
-		SortBy:    "created_at",
-		SortOrder: "desc",
+		SortBy:    SortByCreatedAt,
+		SortOrder: SortOrderDesc,
 		Limit:     20,
 		Offset:    0,
 	}
+}
+
+// IsValidSortBy checks if sortBy value is valid
+func IsValidSortBy(sortBy string) bool {
+	return sortBy == "" || sortBy == SortByName || sortBy == SortByCreatedAt || sortBy == SortByUpdatedAt
+}
+
+// IsValidSortOrder checks if sortOrder value is valid
+func IsValidSortOrder(sortOrder string) bool {
+	return sortOrder == "" || sortOrder == SortOrderAsc || sortOrder == SortOrderDesc
+}
+
+// IsValidProvisioningType checks if provisioningType value is valid
+func IsValidProvisioningType(provisioningType string) bool {
+	return provisioningType == "" || provisioningType == ProvisioningInternal || provisioningType == ProvisioningExternal
 }

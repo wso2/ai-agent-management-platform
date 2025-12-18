@@ -79,22 +79,23 @@ func (r *agentRepository) ListAgentsWithFilter(ctx context.Context, orgId uuid.U
 		return nil, 0, fmt.Errorf("agentRepository.ListAgentsWithFilter count: %w", err)
 	}
 
-	// Apply sorting
+	// Apply sorting - map camelCase API values to snake_case DB columns
 	sortColumn := "created_at"
-	if filter.SortBy == "name" || filter.SortBy == "updatedAt" || filter.SortBy == "createdAt" {
-		switch filter.SortBy {
-		case "name":
-			sortColumn = "name"
-		case "updatedAt":
-			sortColumn = "updated_at"
-		case "createdAt":
-			sortColumn = "created_at"
-		}
+	switch filter.SortBy {
+	case models.SortByName:
+		sortColumn = "name"
+	case models.SortByUpdatedAt:
+		sortColumn = "updated_at"
+	case models.SortByCreatedAt:
+		sortColumn = "created_at"
 	}
+
+	// Validate sortOrder to prevent SQL injection - only allow known values
 	sortOrder := "DESC"
-	if filter.SortOrder == "asc" {
+	if filter.SortOrder == models.SortOrderAsc {
 		sortOrder = "ASC"
 	}
+
 	query = query.Order(fmt.Sprintf("%s %s", sortColumn, sortOrder))
 
 	// Apply pagination

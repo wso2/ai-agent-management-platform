@@ -132,6 +132,23 @@ func (c *agentController) ListAgents(w http.ResponseWriter, r *http.Request) {
 	sortBy := r.URL.Query().Get("sortBy")
 	sortOrder := r.URL.Query().Get("sortOrder")
 
+	// Validate filter parameters
+	if !models.IsValidSortBy(sortBy) {
+		log.Error("ListAgents: invalid sortBy parameter", "sortBy", sortBy)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid sortBy parameter: must be 'name', 'createdAt', or 'updatedAt'")
+		return
+	}
+	if !models.IsValidSortOrder(sortOrder) {
+		log.Error("ListAgents: invalid sortOrder parameter", "sortOrder", sortOrder)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid sortOrder parameter: must be 'asc' or 'desc'")
+		return
+	}
+	if !models.IsValidProvisioningType(provisioningType) {
+		log.Error("ListAgents: invalid provisioningType parameter", "provisioningType", provisioningType)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid provisioningType parameter: must be 'internal' or 'external'")
+		return
+	}
+
 	// Build filter
 	filter := models.AgentFilter{
 		Search:           search,
