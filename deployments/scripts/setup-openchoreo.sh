@@ -164,7 +164,7 @@ echo "7️⃣  Installing OpenChoreo Observability Plane..."
 if helm status openchoreo-observability-plane -n openchoreo-observability-plane &>/dev/null; then
     echo "⏭️  Observability Plane already installed, skipping..."
 else
-    echo "   This includes OpenSearch and OpenSearch Dashboards..."
+    echo "   This includes OpenSearch"
     helm install openchoreo-observability-plane oci://ghcr.io/openchoreo/helm-charts/openchoreo-observability-plane \
     --version 0.7.0 \
     --namespace openchoreo-observability-plane \
@@ -172,15 +172,39 @@ else
     --values https://raw.githubusercontent.com/openchoreo/openchoreo/release-v0.7/install/k3d/single-cluster/values-op.yaml
 fi
 
-echo "⏳ Waiting for OpenSearch and OpenSearch Dashboards pods to be ready..."
-kubectl wait --for=condition=Ready pod --all -n openchoreo-observability-plane --timeout=900s || {
-    echo "⚠️  Some OpenSearch and OpenSearch Dashboards pods may still be starting (non-fatal)"
+echo "⏳ Waiting for OpenSearch pods to be ready..."
+# Wait for deployments to be available
+kubectl wait --for=condition=Available deployment --all -n openchoreo-observability-plane --timeout=900s || {
+    echo "⚠️  Some deployments may still be starting (non-fatal)"
 }
-echo "✅ OpenSearch and OpenSearch Dashboards ready"
+# Wait for statefulsets to be ready
+kubectl wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset --all -n openchoreo-observability-plane --timeout=900s || {
+    echo "⚠️  Some statefulsets may still be starting (non-fatal)"
+}
+echo "✅ OpenSearch ready"
+
+if helm status wso2-amp-observability-extension -n openchoreo-observability-plane &>/dev/null; then
+    echo "⏭️  WSO2 AMP Observability Extension already installed, skipping..."
+else
+    echo "Building and loading Traces Observer Service Docker image into k3d cluster..."
+    make -C $1/traces-observer-service docker-load-k3d
+    sleep 10        
+    echo "   Traces Observer Service to the Observability Plane for tracing ingestion..."
+    helm install wso2-amp-observability-extension $1/deployments/helm-charts/wso2-amp-observability-extension \
+        --create-namespace \
+        --namespace openchoreo-observability-plane \
+        --timeout=10m \
+        --set tracesObserver.developmentMode=true
+fi
 
 echo "⏳ Waiting for Observability Plane pods to be ready..."
-kubectl wait --for=condition=Ready pod --all -n openchoreo-observability-plane --timeout=600s || {
-    echo "⚠️  Some Observability pods may still be starting (non-fatal)"
+# Wait for deployments to be available
+kubectl wait --for=condition=Available deployment --all -n openchoreo-observability-plane --timeout=900s || {
+    echo "⚠️  Some deployments may still be starting (non-fatal)"
+}
+# Wait for statefulsets to be ready
+kubectl wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset --all -n openchoreo-observability-plane --timeout=900s || {
+    echo "⚠️  Some statefulsets may still be starting (non-fatal)"
 }
 echo "✅ OpenChoreo Observability Plane ready"
 echo ""
