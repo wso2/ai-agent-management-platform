@@ -24,6 +24,7 @@ import { EnvironmentVariable } from "./EnvironmentVariable";
 import type { Environment, EnvironmentVariable as EnvVar } from "@agent-management-platform/types";
 import { useEffect } from "react";
 import { TextInput, DrawerHeader, DrawerContent } from "@agent-management-platform/views";
+import { useNotification } from "../providers";
 
 interface DeploymentConfigProps {
     onClose: () => void;
@@ -49,6 +50,7 @@ export function DeploymentConfig({
     imageId,
 }: DeploymentConfigProps) {
     const { mutate: deployAgent, isPending } = useDeployAgent();
+    const { notify } = useNotification();
     const { data: agent, isLoading: isLoadingAgent } = useGetAgent({
         orgName,
         projName,
@@ -77,34 +79,36 @@ export function DeploymentConfig({
         });
     }, [configurations, methods]);
 
-    const handleDeploy = async () => {
-        try {
-            const formData = methods.getValues();
+    const handleDeploy = () => {
+        const formData = methods.getValues();
 
-            const envVariables: EnvVar[] = formData.env
-                .filter((envVar: { key: string; value: string }) => envVar.key && envVar.value)
-                .map((envVar: { key: string; value: string }) => ({
-                    key: envVar.key,
-                    value: envVar.value,
-                }));
-            deployAgent({
-                params: {
-                    orgName,
-                    projName,
-                    agentName,
-                },
-                body: {
-                    imageId: imageId,
-                    env: envVariables.length > 0 ? envVariables : undefined,
-                },
-            }, {
-                onSuccess: () => {
-                    onClose();
-                },
-            });
-        } catch {
-            // Error handling is done by the mutation
-        }
+        const envVariables: EnvVar[] = formData.env
+            .filter((envVar: { key: string; value: string }) => envVar.key && envVar.value)
+            .map((envVar: { key: string; value: string }) => ({
+                key: envVar.key,
+                value: envVar.value,
+            }));
+
+        deployAgent({
+            params: {
+                orgName,
+                projName,
+                agentName,
+            },
+            body: {
+                imageId: imageId,
+                env: envVariables.length > 0 ? envVariables : undefined,
+            },
+        }, {
+            onSuccess: () => {
+                notify('success', 'Deployment started successfully');
+                onClose();
+            },
+            onError: (error) => {
+                const message = error instanceof Error ? error.message : 'Deployment failed';
+                notify('error', message);
+            },
+        });
     };
 
 
