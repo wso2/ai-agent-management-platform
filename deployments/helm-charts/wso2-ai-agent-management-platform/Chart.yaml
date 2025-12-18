@@ -24,3 +24,10 @@ dependencies:
     condition: postgresql.enabled
     tags:
       - database
+
+  # Default Resources Extension
+  - name: wso2-amp-default-resources-extension
+    version: 0.0.0-dev
+    repository: file://../wso2-amp-default-resources-extension
+    tags:
+      - default-resources

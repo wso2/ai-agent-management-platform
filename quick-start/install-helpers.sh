@@ -530,49 +530,50 @@ verify_docker_running() {
 }
 
 # Check if Kind is installed
-verify_kind_installed() {
-    if ! command_exists kind; then
-        log_error "Kind is not installed"
+verify_k3d_installed() {
+    if ! command_exists k3d; then
+        log_error "k3d is not installed"
         echo ""
-        echo "   Kind (Kubernetes in Docker) is required for local installation."
+        echo "   k3d is required for local installation."
         echo ""
-        echo "   Install Kind:"
-        echo "   → macOS: brew install kind"
-        echo "   → Linux: curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64"
-        echo "            chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind"
+        echo "   Install k3d:"
+        echo "   → macOS: brew install k3d"
+        echo "   → Linux: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash"
         echo ""
-        echo "   Documentation: https://kind.sigs.k8s.io/docs/user/quick-start/"
+        echo "   Documentation: https://k3d.io/"
         echo ""
         return 1
     fi
     return 0
 }
 
-# Setup Kind cluster
-setup_kind_cluster() {
+# Setup k3d cluster
+setup_k3d_cluster() {
     local cluster_name="${1:-openchoreo-local}"
-    local config_file="${2:-./kind-config.yaml}"
+    local config_file="${2:-./k3d-config.yaml}"
     
-    log_info "Setting up Kind cluster '$cluster_name'..."
+    log_info "Setting up k3d cluster '$cluster_name'..."
     
-    # Ensure container is connected to kind network (critical when running in Docker container)
-    if docker network inspect kind &>/dev/null 2>&1; then
+    # Ensure container is connected to k3d network (critical when running in Docker container)
+    local k3d_network="k3d-${cluster_name}"
+    if docker network inspect "$k3d_network" &>/dev/null 2>&1; then
         local container_id="$(cat /etc/hostname 2>/dev/null || echo "")"
         if [[ -n "$container_id" ]] && [[ "$container_id" != "localhost" ]]; then
-            if [ "$(docker inspect -f '{{json .NetworkSettings.Networks.kind}}' "${container_id}" 2>/dev/null)" = "null" ]; then
-                log_info "Connecting container to kind network..."
-                docker network connect "kind" "${container_id}" >/dev/null 2>&1 || true
+            if [ "$(docker inspect -f "{{json .NetworkSettings.Networks.${k3d_network}}}" "${container_id}" 2>/dev/null)" = "null" ]; then
+                log_info "Connecting container to k3d network ($k3d_network)..."
+                docker network connect "$k3d_network" "${container_id}" >/dev/null 2>&1 || true
                 sleep 2
             fi
         fi
     fi
-    
+
     # Check if cluster already exists
-    if kind get clusters 2>/dev/null | grep -q "^${cluster_name}$"; then
-        log_warning "Kind cluster '$cluster_name' already exists"
+    if k3d cluster ls 2>/dev/null | grep -q "^${cluster_name}$"; then
+        log_warning "k3d cluster '$cluster_name' already exists"
         
         # Check if cluster container is actually running
-        local control_plane_container="${cluster_name}-control-plane"
+        # k3d  control plane container : k3d-<cluster_name>-server-0
+        local control_plane_container="k3d-${cluster_name}-server-0"
         if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${control_plane_container}$"; then
             log_warning "Cluster container '$control_plane_container' is not running. Attempting to recover..."
             docker start "${control_plane_container}" >/dev/null 2>&1 || true
@@ -592,10 +593,11 @@ setup_kind_cluster() {
             # Containerized environment: use internal IP
             log_info "Detected containerized environment, using internal IP..."
 
-            # Get control plane IP from Docker network (prefer kind network)
-            local control_plane_ip=$(docker inspect "${control_plane_container}" --format '{{range $key, $value := .NetworkSettings.Networks}}{{if eq $key "kind"}}{{$value.IPAddress}}{{end}}{{end}}' 2>/dev/null | head -1)
+            # Get control plane IP from Docker network (k3d network pattern: k3d-<cluster_name>)
+            local k3d_network="k3d-${cluster_name}"
+            local control_plane_ip=$(docker inspect "${control_plane_container}" --format "{{range \$key, \$value := .NetworkSettings.Networks}}{{if eq \$key \"${k3d_network}\"}}{{\\$value.IPAddress}}{{end}}{{end}}" 2>/dev/null | head -1)
 
-            # Fallback to any network IP if kind network IP not found
+            # Fallback to any network IP if k3d network IP not found
             if [[ -z "$control_plane_ip" ]]; then
                 control_plane_ip=$(docker inspect "${control_plane_container}" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null | head -1)
             fi
@@ -604,31 +606,31 @@ setup_kind_cluster() {
             if [[ -n "$control_plane_ip" ]]; then
                 log_info "Configuring kubeconfig with control plane IP: ${control_plane_ip}"
                 mkdir -p /state/kube
-                if kind get kubeconfig --name "${cluster_name}" 2>/dev/null | sed "s|server: https://127.0.0.1:[0-9]*|server: https://${control_plane_ip}:6443|" > /state/kube/config-internal.yaml; then
+                if k3d kubeconfig get "${cluster_name}" 2>/dev/null | sed "s|server: https://[^:]*:[0-9]*|server: https://${control_plane_ip}:6443|" > /state/kube/config-internal.yaml; then
                     export KUBECONFIG=/state/kube/config-internal.yaml
-                    kubectl config use-context "kind-${cluster_name}" >/dev/null 2>&1 || true
+                    kubectl config use-context "k3d-${cluster_name}" >/dev/null 2>&1 || true
                 fi
             else
                 log_warning "Could not determine control plane IP, trying default kubeconfig"
                 mkdir -p /state/kube
-                if kind get kubeconfig --name "${cluster_name}" >/dev/null 2>&1 > /state/kube/config-internal.yaml; then
+                if k3d kubeconfig get "${cluster_name}" >/dev/null 2>&1 > /state/kube/config-internal.yaml; then
                     export KUBECONFIG=/state/kube/config-internal.yaml
-                    kubectl config use-context "kind-${cluster_name}" >/dev/null 2>&1 || true
+                    kubectl config use-context "k3d-${cluster_name}" >/dev/null 2>&1 || true
                 fi
             fi
         else
-            # Local environment: use Kind's built-in kubeconfig export with current port
+            # Local environment: use k3d's built-in kubeconfig export with current port
             log_info "Detected local environment, updating kubeconfig..."
-            if kind export kubeconfig --name "${cluster_name}" 2>&1 | grep -v "warning"; then
+            if k3d kubeconfig merge "${cluster_name}" --kubeconfig-merge-default 2>&1 | grep -v "warning"; then
                 log_success "Kubeconfig updated successfully"
-                kubectl config use-context "kind-${cluster_name}" >/dev/null 2>&1 || true
+                kubectl config use-context "k3d-${cluster_name}" >/dev/null 2>&1 || true
             else
                 log_warning "Failed to export kubeconfig, attempting manual refresh..."
                 # Manually update the kubeconfig in default location
-                kind get kubeconfig --name "${cluster_name}" > "${HOME}/.kube/config-${cluster_name}" 2>/dev/null || true
+                k3d kubeconfig get "${cluster_name}" > "${HOME}/.kube/config-${cluster_name}" 2>/dev/null || true
                 if [[ -f "${HOME}/.kube/config-${cluster_name}" ]]; then
                     export KUBECONFIG="${HOME}/.kube/config-${cluster_name}"
-                    kubectl config use-context "kind-${cluster_name}" >/dev/null 2>&1 || true
+                    kubectl config use-context "k3d-${cluster_name}" >/dev/null 2>&1 || true
                 fi
             fi
         fi
@@ -648,7 +650,7 @@ setup_kind_cluster() {
             fi
             
             # Try with explicit context
-            if kubectl cluster-info --context "kind-${cluster_name}" >/dev/null 2>&1; then
+            if kubectl cluster-info --context "k3d-${cluster_name}" >/dev/null 2>&1; then
                 cluster_accessible=true
                 break
             fi
@@ -658,14 +660,14 @@ setup_kind_cluster() {
                 log_info "Retrying kubeconfig refresh..."
                 if [[ "$is_containerized" == "true" ]] && [[ -n "$control_plane_ip" ]]; then
                     # Containerized retry
-                    if kind get kubeconfig --name "${cluster_name}" 2>/dev/null | sed "s|server: https://127.0.0.1:[0-9]*|server: https://${control_plane_ip}:6443|" > /state/kube/config-internal.yaml; then
+                    if k3d kubeconfig get "${cluster_name}" 2>/dev/null | sed "s|server: https://[^:]*:[0-9]*|server: https://${control_plane_ip}:6443|" > /state/kube/config-internal.yaml; then
                         export KUBECONFIG=/state/kube/config-internal.yaml
-                        kubectl config use-context "kind-${cluster_name}" >/dev/null 2>&1 || true
+                        kubectl config use-context "k3d-${cluster_name}" >/dev/null 2>&1 || true
                     fi
                 else
                     # Local environment retry
-                    kind export kubeconfig --name "${cluster_name}" >/dev/null 2>&1 || true
-                    kubectl config use-context "kind-${cluster_name}" >/dev/null 2>&1 || true
+                    k3d kubeconfig merge "${cluster_name}" --kubeconfig-merge-default >/dev/null 2>&1 || true
+                    kubectl config use-context "k3d-${cluster_name}" >/dev/null 2>&1 || true
                 fi
             fi
             
@@ -677,11 +679,11 @@ setup_kind_cluster() {
         done
         
         if [ "$cluster_accessible" = true ]; then
-            log_success "Using existing Kind cluster '$cluster_name'"
+            log_success "Using existing k3d cluster '$cluster_name'"
             if [[ "$is_containerized" == "true" ]] && [[ -n "$control_plane_ip" ]]; then
                 echo "✓ kubectl configured to connect at ${control_plane_ip} (container network)"
             else
-                local api_port=$(kubectl config view -o jsonpath="{.clusters[?(@.name=='kind-${cluster_name}')].cluster.server}" 2>/dev/null | grep -oE '[0-9]+$' || echo "unknown")
+                local api_port=$(kubectl config view -o jsonpath="{.clusters[?(@.name=='k3d-${cluster_name}')].cluster.server}" 2>/dev/null | grep -oE '[0-9]+$' || echo "unknown")
                 echo "✓ kubectl configured to connect at localhost:${api_port}"
             fi
             return 0
@@ -691,8 +693,8 @@ setup_kind_cluster() {
             echo "   Troubleshooting steps:"
             echo "   1. Check cluster container: docker ps | grep ${control_plane_container}"
             echo "   2. Check container logs: docker logs ${control_plane_container}"
-            echo "   3. Verify network: docker network inspect kind"
-            echo "   4. Delete and recreate: kind delete cluster --name $cluster_name"
+            echo "   3. Verify network: docker network inspect k3d-${cluster_name}"
+            echo "   4. Delete and recreate: k3d cluster delete $cluster_name"
             echo ""
             return 1
         fi
@@ -709,8 +711,8 @@ setup_kind_cluster() {
     fi
     
     # Create Kind cluster
-    log_info "Creating Kind cluster (this may take 2-3 minutes)..."
-    if kind create cluster --config "$config_file" 2>&1 | tee /tmp/kind-create.log; then
+    log_info "Creating k3d cluster (this may take 2-3 minutes)..."
+    if k3d cluster create --config "$config_file" 2>&1 | tee /tmp/kind-create.log; then
         log_success "Kind cluster created successfully"
     else
         log_error "Failed to create Kind cluster"
@@ -776,14 +778,14 @@ setup_kind_cluster() {
     local retry_count=0
 
     while [ $retry_count -lt $max_retries ]; do
-        if kubectl cluster-info --context "kind-${cluster_name}" >/dev/null 2>&1; then
+        if kubectl cluster-info --context "k3d-${cluster_name}" >/dev/null 2>&1; then
             log_success "Kubernetes API server is accessible"
 
             # Show cluster info for debugging
             if [[ "$VERBOSE" == "true" ]]; then
                 echo ""
                 log_info "Cluster nodes (will become Ready after CNI installation):"
-                kubectl get nodes --context "kind-${cluster_name}" 2>/dev/null || true
+                kubectl get nodes --context "k3d-${cluster_name}" 2>/dev/null || true
                 echo ""
             fi
 
@@ -806,69 +808,13 @@ setup_kind_cluster() {
     return 1
 }
 
-# Wait for Kind cluster to be ready (API server accessible check only)
-# NOTE: This function now only verifies API server accessibility, not node readiness.
-# Nodes will become Ready after CNI installation (handled by OpenChoreo/Cilium).
-wait_for_kind_cluster_ready() {
-    local cluster_name="${1:-openchoreo-local}"
-    local timeout=60  # Reduced from 600s to 60s since we only check API server
-    local elapsed=0
-    local check_interval=2
-
-    log_info "Verifying Kubernetes API server is accessible..."
-
-    while [ $elapsed -lt $timeout ]; do
-        # Check if API server is accessible
-        if kubectl cluster-info --context "kind-${cluster_name}" >/dev/null 2>&1; then
-            log_success "Kubernetes API server is accessible"
-            return 0
-        fi
-
-        sleep $check_interval
-        elapsed=$((elapsed + check_interval))
-    done
-
-    echo ""
-    log_error "Kubernetes API server did not become accessible within ${timeout}s"
-    echo ""
-    log_info "Cluster status:"
-    docker ps | grep "${cluster_name}" || echo "No cluster containers found"
-    echo ""
-
-    return 1
-}
-
 # ============================================================================
 # OPENCHOREO INSTALLATION FUNCTIONS
 # ============================================================================
 
 # OpenChoreo configuration
-OPENCHOREO_VERSION="${OPENCHOREO_VERSION:-0.3.2}"
+OPENCHOREO_VERSION="${OPENCHOREO_VERSION:-0.7.0}"
 OPENCHOREO_REGISTRY="oci://ghcr.io/openchoreo/helm-charts"
-
-# Install OpenChoreo Cilium CNI
-install_openchoreo_cilium() {
-    log_info "Installing Cilium CNI..."
-    
-    if helm status cilium -n cilium >/dev/null 2>&1; then
-        log_warning "Cilium already installed, skipping..."
-        return 0
-    fi
-    
-    install_remote_helm_chart "cilium" \
-        "${OPENCHOREO_REGISTRY}/cilium" \
-        "cilium" \
-        "true" \
-        "true" \
-        "300" \
-        "--version" "$OPENCHOREO_VERSION"
-    
-    log_info "Waiting for Cilium pods to be ready..."
-    kubectl wait --for=condition=Ready pod -l k8s-app=cilium -n cilium --timeout=300s 2>&1 | grep -v "no matching resources" || true
-    
-    log_success "Cilium CNI ready"
-    return 0
-}
 
 # Install OpenChoreo Control Plane
 install_openchoreo_control_plane() {
@@ -885,7 +831,10 @@ install_openchoreo_control_plane() {
         "true" \
         "false" \
         "600" \
-        "--version" "$OPENCHOREO_VERSION"
+        "--version" "$OPENCHOREO_VERSION" \
+        "--values https://raw.githubusercontent.com/openchoreo/openchoreo/release-v0.7/install/k3d/single-cluster/values-cp.yaml" \
+        "--set global.defaultResources.enabled=false" \
+        "--set security.oidc.authorizationUrl=http://thunder.openchoreo.localhost:8089/oauth2/authorize"
     
     log_info "Waiting for Control Plane pods to be ready..."
     if ! kubectl wait --for=condition=Ready pod --all -n openchoreo-control-plane --timeout=600s 2>/dev/null; then
@@ -913,9 +862,23 @@ install_openchoreo_data_plane() {
         "false" \
         "600" \
         "--version" "$OPENCHOREO_VERSION" \
+        "--values https://raw.githubusercontent.com/openchoreo/openchoreo/release-v0.7/install/k3d/single-cluster/values-dp.yaml" \
         "--set" "cert-manager.enabled=false" \
         "--set" "cert-manager.crds.enabled=false"
     
+    log_info "Verifying Data Plane Resources"
+    if kubectl get dataplane default -n default &>/dev/null; then
+        log_success "Data Plane Resources verified"
+        AGENT_ENABLED=$(kubectl get dataplane default -n default -o jsonpath='{.spec.agent.enabled}' 2>/dev/null || echo "false")
+        if [[ "$AGENT_ENABLED" == "true" ]]; then
+            log_info "Data Plane Agent mode is enabled"
+        else
+            log_info "Data Plane Agent mode is disabled"
+        fi
+    else
+        log_warning "Data Plane Resources not found yet"
+    fi
+
     log_info "Waiting for Data Plane pods to be ready..."
     if ! kubectl wait --for=condition=Ready pod --all -n openchoreo-data-plane --timeout=600s 2>/dev/null; then
         log_warning "Some Data Plane pods may still be starting (non-fatal)"
@@ -923,7 +886,7 @@ install_openchoreo_data_plane() {
 
     # Register the Data Plane
     log_info "Registering Data Plane..."
-    if curl -s https://raw.githubusercontent.com/openchoreo/openchoreo/release-v0.3/install/add-default-dataplane.sh | bash; then
+    if curl -s https://raw.githubusercontent.com/openchoreo/openchoreo/release-v0.7/install/add-data-plane.sh | bash; then
         log_success "Data Plane registered successfully"
     else
         log_warning "Data Plane registration script failed (non-fatal)"
@@ -965,7 +928,8 @@ install_openchoreo_observability_plane() {
         "true" \
         "true" \
         "900" \
-        "--version" "$OPENCHOREO_VERSION"
+        "--version" "$OPENCHOREO_VERSION" \
+        "--values https://raw.githubusercontent.com/openchoreo/openchoreo/release-v0.7/install/k3d/single-cluster/values-op.yaml"
     
     log_info "Waiting for Observability Plane pods to be ready..."
     if ! kubectl wait --for=condition=Ready pod --all -n openchoreo-observability-plane --timeout=900s 2>/dev/null; then
@@ -982,15 +946,8 @@ install_openchoreo_core() {
     echo ""
     
     # Set kubectl context
-    kubectl config use-context kind-openchoreo-local >/dev/null 2>&1
-    
-    # Install Cilium CNI
-    if ! install_openchoreo_cilium; then
-        log_error "Failed to install Cilium CNI"
-        return 1
-    fi
-    echo ""
-    
+    kubectl config use-context k3d-openchoreo-local >/dev/null 2>&1
+     
     # Install Control Plane
     if ! install_openchoreo_control_plane; then
         log_error "Failed to install OpenChoreo Control Plane"
@@ -1061,7 +1018,21 @@ install_openchoreo_build_plane() {
         "true" \
         "true" \
         "600" \
-        "--version" "$OPENCHOREO_VERSION"
+        "--version" "$OPENCHOREO_VERSION" \
+        "--values https://raw.githubusercontent.com/openchoreo/openchoreo/release-v0.7/install/k3d/single-cluster/values-bp.yaml"
+
+    log_info "Verifying Build Plane Resources"
+    if kubectl get buildplane default -n default &>/dev/null; then
+        log_success "BuildPlane resource found"
+        AGENT_ENABLED=$(kubectl get buildplane default -n default -o jsonpath='{.spec.agent.enabled}' 2>/dev/null || echo "false")
+        if [[ "$AGENT_ENABLED" == "true" ]]; then
+            log_success "BuildPlane agent is enabled"
+        else
+            log_warning "BuildPlane agent is not enabled"
+        fi
+    else
+        log_warning "BuildPlane resource not found yet"
+    fi
 
     log_info "Waiting for Build Plane pods to be ready..."
     if ! kubectl wait --for=condition=Ready pod --all -n openchoreo-build-plane --timeout=600s 2>/dev/null; then
@@ -1069,7 +1040,7 @@ install_openchoreo_build_plane() {
     fi
         # Configure Build Plane
     log_info "Configuring Build Plane..."
-    if curl -s https://raw.githubusercontent.com/openchoreo/openchoreo/release-v0.3/install/add-build-plane.sh | bash; then
+    if curl -s https://raw.githubusercontent.com/openchoreo/openchoreo/release-v0.7/install/add-build-plane.sh | bash; then
         log_success "Build Plane configured successfully"
     else
         log_warning "Build Plane configuration script failed (non-fatal)"
@@ -1117,12 +1088,7 @@ verify_openchoreo_prerequisites() {
     # Check Docker
     if ! verify_docker_running; then
         return 1
-    fi
-    
-    # Check Kind
-    if ! verify_kind_installed; then
-        return 1
-    fi
+    fi  
     
     log_success "All prerequisites verified"
     return 0

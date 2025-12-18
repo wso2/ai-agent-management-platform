@@ -5,7 +5,7 @@ set -eo pipefail
 # Agent Management Platform - Complete Bootstrap Installation
 # ============================================================================
 # This script provides a single-command installation that:
-# 1. Creates a Kind cluster
+# 1. Creates a k3d cluster
 # 2. Installs OpenChoreo
 # 3. Installs Agent Management Platform
 #
@@ -24,7 +24,7 @@ source "${SCRIPT_DIR}/install-helpers.sh"
 
 # Configuration
 VERBOSE="${VERBOSE:-false}"
-SKIP_KIND="${SKIP_KIND:-false}"
+SKIP_K3D="${SKIP_K3D:-false}"
 SKIP_OPENCHOREO="${SKIP_OPENCHOREO:-false}"
 MINIMAL_MODE="${MINIMAL_MODE:-false}"
 
@@ -39,8 +39,8 @@ while [[ $# -gt 0 ]]; do
             MINIMAL_MODE=true
             shift
             ;;
-        --skip-kind)
-            SKIP_KIND=true
+        --skip-k3d)
+            SKIP_K3D=true
             shift
             ;;
         --skip-openchoreo)
@@ -62,7 +62,7 @@ while [[ $# -gt 0 ]]; do
 🚀 Agent Management Platform - Bootstrap Installation
 
 This script provides a complete one-command installation of:
-  • Kind cluster (Kubernetes in Docker)
+  • k3d cluster (k3s in Docker)
   • OpenChoreo platform
   • Agent Management Platform with observability
 
@@ -72,7 +72,7 @@ Usage:
 Options:
   --verbose, -v           Show detailed installation output
   --minimal, --core-only  Install only core OpenChoreo components (faster)
-  --skip-kind             Skip Kind cluster creation (use existing cluster)
+  --skip-k3d             Skip k3d cluster creation (use existing cluster)
   --skip-openchoreo       Skip OpenChoreo installation (install platform only)
   --config FILE           Use custom configuration file for platform
   --help, -h              Show this help message
@@ -81,7 +81,7 @@ Examples:
   $0                      # Full installation (recommended)
   $0 --verbose            # Full installation with detailed output
   $0 --minimal            # Faster installation with core components only
-  $0 --skip-kind          # Use existing Kind cluster
+  $0 --skip-k3d           # Use existing k3d cluster
   $0 --config custom.yaml # Installation with custom platform config
 
 After installation:
@@ -91,7 +91,7 @@ Prerequisites:
   • Docker (Docker Desktop or Colima)
   • kubectl
   • helm
-  • kind
+  • k3d
 
 Installation Time:
   • Full installation: ~10-15 minutes
@@ -136,7 +136,7 @@ fi
 
 echo ""
 echo "This will install:"
-echo "  ✓ Kind cluster (local Kubernetes)"
+echo "  ✓ k3d cluster (local Kubernetes)"
 echo "  ✓ OpenChoreo platform"
 echo "  ✓ Agent Management Platform"
 echo "  ✓ Observability stack"
@@ -188,45 +188,44 @@ fi
 echo ""
 
 # ============================================================================
-# STEP 2: SETUP KIND CLUSTER
+# STEP 2: SETUP K3D CLUSTER
 # ============================================================================
 
-if [[ "$SKIP_KIND" == "true" ]]; then
+if [[ "$SKIP_K3D" == "true" ]]; then
     if [[ "$VERBOSE" == "false" ]]; then
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "Step 2/4: Skipping Kind cluster setup (--skip-kind)"
+        echo "Step 2/4: Skipping k3d cluster setup (--skip-k3d)"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
     else
-        log_info "Step 2/4: Skipping Kind cluster setup (--skip-kind)"
+        log_info "Step 2/4: Skipping k3d cluster setup (--skip-k3d)"
         echo ""
     fi
 else
     if [[ "$VERBOSE" == "false" ]]; then
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "Step 2/4: Setting up Kind cluster..."
+        echo "Step 2/4: Setting up k3d cluster..."
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
         echo "⏱️  This may take 1-2 minutes..."
         echo ""
-        echo "💡 Note: Nodes will become Ready after CNI installation (Step 3)"
         echo ""
     else
-        log_info "Step 2/4: Setting up Kind cluster..."
+        log_info "Step 2/4: Setting up k3d cluster..."
         echo ""
     fi
     
-    if ! setup_kind_cluster "openchoreo-local" "${SCRIPT_DIR}/kind-config.yaml"; then
+    if ! setup_k3d_cluster "openchoreo-local" "${SCRIPT_DIR}/k3d-config.yaml"; then
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        log_error "Failed to setup Kind cluster"
+        log_error "Failed to setup k3d cluster"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
-        echo "The Kind cluster could not be created or nodes did not become ready."
+        echo "The k3d cluster could not be created or nodes did not become ready."
         echo ""
         echo "Common solutions:"
         echo "  1. Delete existing cluster and retry:"
-        echo "       kind delete cluster --name openchoreo-local"
+        echo "       k3d cluster delete openchoreo-local"
         echo "       ./install.sh"
         echo ""
         echo "  2. Check Docker resources:"
@@ -252,7 +251,7 @@ else
     fi
     
     if [[ "$VERBOSE" == "false" ]]; then
-        echo "✓ Kind cluster ready"
+        echo "✓ k3d cluster ready"
     fi
     echo ""
 fi
@@ -284,7 +283,6 @@ else
         fi
         echo ""
         echo "Installing components:"
-        echo "  • Cilium CNI"
         echo "  • OpenChoreo Control Plane"
         echo "  • OpenChoreo Data Plane"
         echo "  • OpenChoreo Observability Plane"

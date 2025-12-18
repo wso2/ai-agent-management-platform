@@ -123,12 +123,6 @@ func createComponentCR(orgName, projectName string, req *spec.CreateAgentRequest
 				"memory": DefaultMemoryLimit,
 			},
 		},
-		"endpoints": map[string]interface{}{
-			fmt.Sprintf("%s-endpoint", req.Name): map[string]interface{}{
-				"port":     containerPort,
-				"basePath": basePath,
-			},
-		},
 		"basePath": basePath,
 	}
 
