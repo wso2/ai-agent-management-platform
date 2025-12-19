@@ -37,7 +37,7 @@ import (
 )
 
 type AgentManagerService interface {
-	ListAgents(ctx context.Context, userIdpId uuid.UUID, orgName string, projName string, limit int32, offset int32) ([]*models.AgentResponse, int32, error)
+	ListAgents(ctx context.Context, userIdpId uuid.UUID, orgName string, projName string, filter models.AgentFilter) ([]*models.AgentResponse, int32, error)
 	CreateAgent(ctx context.Context, userIdpId uuid.UUID, orgName string, projectName string, req *spec.CreateAgentRequest) error
 	BuildAgent(ctx context.Context, userIdpId uuid.UUID, orgName string, projectName string, agentName string, commitId string) (*models.BuildResponse, error)
 	DeleteAgent(ctx context.Context, userIdpId uuid.UUID, orgName string, projectName string, agentName string) error
@@ -126,8 +126,8 @@ func (s *agentManagerService) GetAgent(ctx context.Context, userIdpId uuid.UUID,
 	return s.convertManagedAgentToAgentResponse(ocAgentComponent, agent), nil
 }
 
-func (s *agentManagerService) ListAgents(ctx context.Context, userIdpId uuid.UUID, orgName string, projName string, limit int32, offset int32) ([]*models.AgentResponse, int32, error) {
-	s.logger.Info("Listing agents", "orgName", orgName, "projectName", projName, "limit", limit, "offset", offset, "userIdpId", userIdpId)
+func (s *agentManagerService) ListAgents(ctx context.Context, userIdpId uuid.UUID, orgName string, projName string, filter models.AgentFilter) ([]*models.AgentResponse, int32, error) {
+	s.logger.Info("Listing agents", "orgName", orgName, "projectName", projName, "filter", filter, "userIdpId", userIdpId)
 	// Validate organization exists
 	org, err := s.OrganizationRepository.GetOrganizationByOrgName(ctx, userIdpId, orgName)
 	if err != nil {
@@ -146,34 +146,22 @@ func (s *agentManagerService) ListAgents(ctx context.Context, userIdpId uuid.UUI
 		s.logger.Error("Failed to find project", "projectName", projName, "orgId", org.ID, "error", err)
 		return nil, 0, fmt.Errorf("failed to find project %s: %w", projName, err)
 	}
-	// Fetch all agents from the database
-	agents, err := s.AgentRepository.ListAgents(ctx, org.ID, project.ID)
+
+	// Fetch agents with filter from the database
+	agents, total, err := s.AgentRepository.ListAgentsWithFilter(ctx, org.ID, project.ID, filter)
 	if err != nil {
 		s.logger.Error("Failed to list agents from repository", "orgId", org.ID, "projectId", project.ID, "error", err)
-		return nil, 0, fmt.Errorf("failed to list external agents: %w", err)
+		return nil, 0, fmt.Errorf("failed to list agents: %w", err)
 	}
-	var allAgents []*models.AgentResponse
+
+	// Convert to response format
+	var agentResponses []*models.AgentResponse
 	for _, agent := range agents {
-		allAgents = append(allAgents, s.convertToAgentListItem(agent, project.Name))
+		agentResponses = append(agentResponses, s.convertToAgentListItem(agent, project.Name))
 	}
 
-	// Calculate total count
-	total := int32(len(allAgents))
-
-	// Apply pagination
-	var paginatedAgents []*models.AgentResponse
-	if offset >= total {
-		// If offset is beyond available data, return empty slice
-		paginatedAgents = []*models.AgentResponse{}
-	} else {
-		endIndex := offset + limit
-		if endIndex > total {
-			endIndex = total
-		}
-		paginatedAgents = allAgents[offset:endIndex]
-	}
-	s.logger.Info("Listed agents successfully", "orgName", orgName, "projName", projName, "totalAgents", total, "returnedAgents", len(paginatedAgents))
-	return paginatedAgents, total, nil
+	s.logger.Info("Listed agents successfully", "orgName", orgName, "projName", projName, "totalAgents", total, "returnedAgents", len(agentResponses))
+	return agentResponses, int32(total), nil
 }
 
 func (s *agentManagerService) CreateAgent(ctx context.Context, userIdpId uuid.UUID, orgName string, projectName string, req *spec.CreateAgentRequest) error {

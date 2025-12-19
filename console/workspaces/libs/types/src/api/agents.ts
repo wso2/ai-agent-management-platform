@@ -61,6 +61,15 @@ export type ListAgentsPathParams = OrgProjPathParams;
 export type CreateAgentPathParams = OrgProjPathParams;
 export type GetAgentPathParams = AgentPathParams;
 export type DeleteAgentPathParams = AgentPathParams;
-export type ListAgentsQuery = ListQuery;
+
+// Sort field options for agent list
+export type AgentSortBy = 'name' | 'createdAt' | 'updatedAt';
+
+export interface ListAgentsQuery extends ListQuery {
+  search?: string;
+  provisioningType?: ProvisioningType;
+  sortBy?: AgentSortBy;
+  sortOrder?: 'asc' | 'desc';
+}
 
 

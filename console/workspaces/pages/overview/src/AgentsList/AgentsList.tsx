@@ -100,7 +100,16 @@ export interface AgentWithHref extends AgentResponse {
 export const AgentsList: React.FC = () => {
   const theme = useTheme();
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [hoveredAgentId, setHoveredAgentId] = useState<string | null>(null);
+
+  // Debounce search input to reduce API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Detect touch device for alternative interaction pattern
   const isTouchDevice =
@@ -118,10 +127,10 @@ export const AgentsList: React.FC = () => {
     error,
     isRefetching,
     refetch: refetchAgents,
-  } = useListAgents({
-    orgName: orgId,
-    projName: projectId,
-  });
+  } = useListAgents(
+    { orgName: orgId, projName: projectId },
+    { search: debouncedSearch || undefined }
+  );
   const { mutate: deleteAgent, isPending: isDeletingAgent } = useDeleteAgent();
   const { data: project, isLoading: isProjectLoading } = useGetProject({
     orgName: orgId,
@@ -166,7 +175,8 @@ export const AgentsList: React.FC = () => {
       projectId &&
       !data?.agents?.length &&
       !isLoading &&
-      !isRefetching
+      !isRefetching &&
+      !debouncedSearch // Don't redirect when searching with no results
     ) {
       navigate(
         generatePath(
@@ -176,34 +186,28 @@ export const AgentsList: React.FC = () => {
         )
       );
     }
-  }, [orgId, projectId, data?.agents, isLoading, isRefetching, navigate]);
+  }, [orgId, projectId, data?.agents, isLoading, isRefetching, navigate, debouncedSearch]);
 
   const agentsWithHref: AgentWithHref[] = useMemo(
     () =>
-      data?.agents
-        ?.filter(
-          (agent: AgentResponse) =>
-            agent.displayName.toLowerCase().includes(search.toLowerCase()) ||
-            agent.name.toLowerCase().includes(search.toLowerCase())
-        )
-        .map((agent) => ({
-          ...agent,
-          href: generatePath(
-            getAgentPath(agent.provisioning.type === "internal"),
-            {
-              orgId: orgId ?? "",
-              projectId: agent.projectName,
-              agentId: agent.name,
-            }
-          ),
-          id: agent.name,
-          agentInfo: {
-            name: agent.name,
-            displayName: agent.displayName,
-            description: agent.description,
-          },
-        })) ?? [],
-    [data?.agents, search, orgId]
+      data?.agents?.map((agent) => ({
+        ...agent,
+        href: generatePath(
+          getAgentPath(agent.provisioning.type === "internal"),
+          {
+            orgId: orgId ?? "",
+            projectId: agent.projectName,
+            agentId: agent.name,
+          }
+        ),
+        id: agent.name,
+        agentInfo: {
+          name: agent.name,
+          displayName: agent.displayName,
+          description: agent.description,
+        },
+      })) ?? [],
+    [data?.agents, orgId]
   );
 
   const columns = useMemo(
@@ -416,7 +420,6 @@ export const AgentsList: React.FC = () => {
                 size="small"
                 variant="outlined"
                 placeholder="Search agents"
-                disabled={!data?.agents?.length}
               />
             </Box>
             <Button

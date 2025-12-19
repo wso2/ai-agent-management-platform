@@ -26,6 +26,7 @@ import (
 
 	"github.com/wso2/ai-agent-management-platform/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/ai-agent-management-platform/agent-manager-service/middleware/logger"
+	"github.com/wso2/ai-agent-management-platform/agent-manager-service/models"
 	"github.com/wso2/ai-agent-management-platform/agent-manager-service/services"
 	"github.com/wso2/ai-agent-management-platform/agent-manager-service/spec"
 	"github.com/wso2/ai-agent-management-platform/agent-manager-service/utils"
@@ -125,11 +126,44 @@ func (c *agentController) ListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse filter parameters
+	search := r.URL.Query().Get("search")
+	provisioningType := r.URL.Query().Get("provisioningType")
+	sortBy := r.URL.Query().Get("sortBy")
+	sortOrder := r.URL.Query().Get("sortOrder")
+
+	// Validate filter parameters
+	if !models.IsValidSortBy(sortBy) {
+		log.Error("ListAgents: invalid sortBy parameter", "sortBy", sortBy)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid sortBy parameter: must be 'name', 'createdAt', or 'updatedAt'")
+		return
+	}
+	if !models.IsValidSortOrder(sortOrder) {
+		log.Error("ListAgents: invalid sortOrder parameter", "sortOrder", sortOrder)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid sortOrder parameter: must be 'asc' or 'desc'")
+		return
+	}
+	if !models.IsValidProvisioningType(provisioningType) {
+		log.Error("ListAgents: invalid provisioningType parameter", "provisioningType", provisioningType)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid provisioningType parameter: must be 'internal' or 'external'")
+		return
+	}
+
+	// Build filter
+	filter := models.AgentFilter{
+		Search:           search,
+		ProvisioningType: provisioningType,
+		SortBy:           sortBy,
+		SortOrder:        sortOrder,
+		Limit:            limit,
+		Offset:           offset,
+	}
+
 	// Extract user info from JWT token
 	tokenClaims := jwtassertion.GetTokenClaims(ctx)
 	userIdpId := tokenClaims.Sub
 
-	agents, total, err := c.agentService.ListAgents(ctx, userIdpId, orgName, projName, int32(limit), int32(offset))
+	agents, total, err := c.agentService.ListAgents(ctx, userIdpId, orgName, projName, filter)
 	if err != nil {
 		log.Error("ListAgents: failed to list agents", "error", err)
 		if errors.Is(err, utils.ErrOrganizationNotFound) {
