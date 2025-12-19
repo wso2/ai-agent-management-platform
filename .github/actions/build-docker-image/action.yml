@@ -32,6 +32,8 @@ runs:
         tags: ${{ inputs.registry }}/${{ inputs.registry-org }}/${{ inputs.image-name }}:${{ inputs.tag }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        build-args: |
+          VERSION=${{ inputs.tag }}
 
     - name: Log image details
       run: |
