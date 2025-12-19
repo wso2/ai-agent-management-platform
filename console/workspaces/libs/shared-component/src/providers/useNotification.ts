@@ -16,14 +16,19 @@
  * under the License.
  */
 
-export * from './BuildLogs';
-export * from './BuildPanel';
-export * from './ConfirmDialog';
-export * from './BuildSteps';
-export * from './CodeBlock';
-export * from './DeploymentConfig';
-export * from './EnvironmentVariable';
-export * from './AgentLayout';
-export * from './EnvironmentCard';
-export * from './Traces';
-export * from './ConfirmationDialog';
+import { useContext } from 'react';
+import { NotificationContext } from './NotificationContext';
+
+/**
+ * Hook to access notification functions.
+ * Must be used within a NotificationProvider.
+ */
+export function useNotification() {
+  const context = useContext(NotificationContext);
+
+  if (!context) {
+    throw new Error('useNotification must be used within a NotificationProvider');
+  }
+
+  return context;
+}

@@ -16,14 +16,15 @@
  * under the License.
  */
 
-export * from './BuildLogs';
-export * from './BuildPanel';
-export * from './ConfirmDialog';
-export * from './BuildSteps';
-export * from './CodeBlock';
-export * from './DeploymentConfig';
-export * from './EnvironmentVariable';
-export * from './AgentLayout';
-export * from './EnvironmentCard';
-export * from './Traces';
-export * from './ConfirmationDialog';
+import { createContext } from 'react';
+
+// Notification severity types matching MUI Alert
+export type NotificationType = 'success' | 'error' | 'warning' | 'info';
+
+// Shape of the context value
+export interface NotificationContextType {
+  notify: (type: NotificationType, message: string) => void;
+}
+
+// Context with null default - useNotification hook will throw if used outside provider
+export const NotificationContext = createContext<NotificationContextType | null>(null);

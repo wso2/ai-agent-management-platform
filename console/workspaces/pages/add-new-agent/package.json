@@ -48,6 +48,7 @@
     "@wso2/oxygen-ui-icons-react": "0.0.1-alpha.9",
     "@agent-management-platform/views": "workspace:*",
     "@agent-management-platform/api-client": "workspace:*",
+    "@agent-management-platform/shared-component": "workspace:*",
     "@agent-management-platform/types": "workspace:*",
     "dayjs": "1.11.18",
     "yup": "1.4.0",
