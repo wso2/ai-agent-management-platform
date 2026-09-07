@@ -117,11 +117,11 @@ export function RenameLLMProviderDialog({
 
           {error && <Alert severity="error">{error}</Alert>}
 
-          <Form.ElementWrapper label="Display Name" name="displayName" required>
+          <Form.ElementWrapper label="Display Name" name="displayName">
             <TextField
               id="llm-provider-display-name"
               label="Display Name"
-              fullWidth
+              fullWidth required
               autoFocus
               value={name}
               onChange={(e) => {
