@@ -122,7 +122,7 @@ export function OxygenLayout() {
                 <UserMenu.Trigger name={user.primaryLine} />
                 <UserMenu.Header name={user.primaryLine} email={user.secondaryLine} />
                 <UserMenu.Divider />
-                {orgId && (
+                {orgId && globalConfig.featureFlags?.enableProfileManagement === true && (
                   <UserMenu.Item
                     icon={<Settings />}
                     label="Profile Settings"
